@@ -3,38 +3,39 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
 )
 
-func parseBodyToJSON[T any](body io.ReadCloser) (bodyParsed T, err error) {
+func decodeBodyToJSON[T any](body io.ReadCloser) (bodyParsed T, err error) {
 	err = json.NewDecoder(body).Decode(&bodyParsed)
 	return
 }
 
-func writeToJSON(w http.ResponseWriter, val any) {
+func writeJSONResponse[T any](w http.ResponseWriter, val T) error {
 	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(val)
+}
 
-	if err := json.NewEncoder(w).Encode(val); err != nil {
-		log.Println(err)
-		http.Error(w, "Failed to send as JSON.", http.StatusInternalServerError)
+func deferBodyClose(Body io.ReadCloser) {
+	if err := Body.Close(); err != nil {
+		log.Printf("Error closing request body: %v", err)
 	}
 }
 
-func getIdParam(w http.ResponseWriter, r *http.Request) uint {
+func getIdParam(r *http.Request) (uint, error) {
 	idStr := r.PathValue("id")
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		if errors.Is(err, strconv.ErrSyntax) {
-			http.Error(w, "Invalid ID given to route parameter.", http.StatusBadRequest)
-		} else {
-			http.Error(w, "Error converting string to number.", http.StatusBadRequest)
+			return 0, fmt.Errorf("invalid ID given to route parameter: %v", err)
 		}
-		return 0
+		return 0, fmt.Errorf("error converting string to number: %v", err)
 	}
 
-	return uint(id)
+	return uint(id), nil
 }

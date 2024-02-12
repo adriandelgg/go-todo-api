@@ -7,58 +7,72 @@ import (
 )
 
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
-	body, err := parseBodyToJSON[todos.Todo](r.Body)
-	if err != nil {
-		http.Error(w, "Error parsing JSON request body.", http.StatusBadRequest)
-		return
-	}
-
-	defer r.Body.Close()
-
-	todo := todos.NewTodo(body.Description)
-
-	_, err = fmt.Fprintf(w, "Successfully created todo: %+v", todo)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func GetTodos(w http.ResponseWriter, _ *http.Request) {
-	writeToJSON(w, todos.Todos())
-}
-
-func GetTodo(w http.ResponseWriter, r *http.Request) {
-	id := getIdParam(w, r)
-
-	todo, err := todos.GetTodo(id)
+	body, err := decodeBodyToJSON[todos.Todo](r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeToJSON(w, todo)
+	defer deferBodyClose(r.Body)
+
+	todo := todos.NewTodo(body.Description)
+
+	if _, err2 := fmt.Fprintf(w, "Successfully created todo: %+v", todo); err2 != nil {
+		http.Error(w, err2.Error(), http.StatusInternalServerError)
+	}
+}
+
+func GetTodos(w http.ResponseWriter, _ *http.Request) {
+	if err := writeJSONResponse(w, todos.Todos()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func GetTodo(w http.ResponseWriter, r *http.Request) {
+	id, err1 := getIdParam(r)
+	if err1 != nil {
+		http.Error(w, err1.Error(), http.StatusBadRequest)
+		return
+	}
+
+	todo, err2 := todos.GetTodo(id)
+	if err2 != nil {
+		http.Error(w, err2.Error(), http.StatusNotFound)
+		return
+	}
+
+	if err3 := writeJSONResponse(w, todo); err3 != nil {
+		http.Error(w, err3.Error(), http.StatusInternalServerError)
+	}
 }
 
 func MarkCompleted(w http.ResponseWriter, r *http.Request) {
-	id := getIdParam(w, r)
-	todo, err := todos.GetTodo(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	id, err1 := getIdParam(r)
+	if err1 != nil {
+		http.Error(w, err1.Error(), http.StatusBadRequest)
+		return
+	}
+
+	todo, err2 := todos.GetTodo(id)
+	if err2 != nil {
+		http.Error(w, err2.Error(), http.StatusInternalServerError)
 		return
 	}
 	todo.MarkCompleted()
 
-	_, err = fmt.Fprint(w, "Successfully completed todo")
-	if err != nil {
+	if _, err := fmt.Fprint(w, "Successfully completed todo"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func DeleteTodo(w http.ResponseWriter, r *http.Request) {
-	id := getIdParam(w, r)
+	id, err1 := getIdParam(r)
+	if err1 != nil {
+		http.Error(w, err1.Error(), http.StatusBadRequest)
+		return
+	}
 	todos.DeleteTodo(id)
 
-	_, err := fmt.Fprint(w, "Successfully deleted todo")
-	if err != nil {
+	if _, err := fmt.Fprint(w, "Successfully deleted todo"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
